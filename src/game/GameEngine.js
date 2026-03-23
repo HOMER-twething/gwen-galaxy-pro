@@ -30,7 +30,6 @@ export class GameEngine {
 
     // Initialize voice controller
     this.voiceController = new VoiceController();
-    await this.voiceController.init();
 
     // Load main menu
     await this.loadMainMenu();
