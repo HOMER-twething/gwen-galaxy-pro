@@ -18,6 +18,8 @@ export function SimpleApp() {
   const [micDevices, setMicDevices] = useState([]);
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef(null);
+  const [lettersFound, setLettersFound] = useState([]);
+  const [targetLetters, setTargetLetters] = useState([]);
 
   // Word lists for spelling
   const easyWords = ['CAT', 'DOG', 'SUN', 'MOM', 'DAD', 'BEE', 'CUP', 'HAT', 'BIG', 'RED'];
@@ -202,87 +204,169 @@ export function SimpleApp() {
     }
   };
 
-  // Voice recognition for spelling
+  // Voice recognition for spelling - SUPER FORGIVING for kids!
   const listenForSpelling = (word) => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     const recognition = new SpeechRecognition();
     recognitionRef.current = recognition;
     
+    // Set up target letters
+    const letters = word.split('');
+    setTargetLetters(letters);
+    setLettersFound([]);
+    
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = 'en-US';
-    recognition.maxAlternatives = 3;
+    recognition.maxAlternatives = 5;
     
     recognition.onstart = () => {
       console.log('Voice recognition started for word:', word);
       setIsListening(true);
-      showFeedback(`Listening for: ${word}`, false);
+      showFeedback(`Say each letter: ${letters.join(' - ')}`, false);
     };
     
     recognition.onresult = (event) => {
-      let finalTranscript = '';
-      let interimTranscript = '';
-      
+      // Process all results to find letters
       for (let i = event.resultIndex; i < event.results.length; i++) {
         const transcript = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-          finalTranscript += transcript;
-        } else {
-          interimTranscript += transcript;
-        }
-      }
-      
-      // Show interim results
-      if (interimTranscript) {
-        const cleaned = interimTranscript.toUpperCase().replace(/[^A-Z]/g, '');
-        showFeedback(`Hearing: ${cleaned}`, false);
-      }
-      
-      // Process final results
-      if (finalTranscript) {
-        const heard = finalTranscript.toUpperCase().replace(/[^A-Z]/g, '');
-        console.log('Final heard:', heard, 'Looking for:', word);
         
-        // Check if the word was spelled correctly
-        if (heard.includes(word)) {
+        // Clean and process the transcript
+        let heard = transcript.toUpperCase();
+        
+        // Convert common phonetic interpretations to letters
+        heard = heard
+          .replace(/\bBEE\b/gi, 'B')
+          .replace(/\bSEE\b/gi, 'C')
+          .replace(/\bDEE\b/gi, 'D')
+          .replace(/\bEE\b/gi, 'E')
+          .replace(/\bEF\b/gi, 'F')
+          .replace(/\bGEE\b/gi, 'G')
+          .replace(/\bAITCH\b/gi, 'H')
+          .replace(/\bEYE\b/gi, 'I')
+          .replace(/\bJAY\b/gi, 'J')
+          .replace(/\bKAY\b/gi, 'K')
+          .replace(/\bEL\b/gi, 'L')
+          .replace(/\bEM\b/gi, 'M')
+          .replace(/\bEN\b/gi, 'N')
+          .replace(/\bOH\b/gi, 'O')
+          .replace(/\bPEE\b/gi, 'P')
+          .replace(/\bCUE\b/gi, 'Q')
+          .replace(/\bQUEUE\b/gi, 'Q')
+          .replace(/\bAR\b/gi, 'R')
+          .replace(/\bARE\b/gi, 'R')
+          .replace(/\bESS\b/gi, 'S')
+          .replace(/\bTEE\b/gi, 'T')
+          .replace(/\bYOU\b/gi, 'U')
+          .replace(/\bVEE\b/gi, 'V')
+          .replace(/\bDOUBLE YOU\b/gi, 'W')
+          .replace(/\bDOUBLEYOU\b/gi, 'W')
+          .replace(/\bEX\b/gi, 'X')
+          .replace(/\bWHY\b/gi, 'Y')
+          .replace(/\bZEE\b/gi, 'Z')
+          .replace(/\bZED\b/gi, 'Z')
+          .replace(/\bAY\b/gi, 'A')
+          .replace(/\bEH\b/gi, 'A')
+          .replace(/[^A-Z]/g, ' ')  // Remove non-letters
+          .replace(/\s+/g, '');      // Remove spaces
+        
+        // Check each character in what we heard
+        for (let char of heard) {
+          const currentIndex = lettersFound.length;
+          if (currentIndex < letters.length && char === letters[currentIndex]) {
+            // Found the next letter!
+            const newLettersFound = [...lettersFound, char];
+            setLettersFound(newLettersFound);
+            
+            // Give immediate positive feedback
+            speak(`Good! ${char}!`);
+            
+            // Check if word is complete
+            if (newLettersFound.length === letters.length) {
+              // SUCCESS!
+              recognition.stop();
+              setIsListening(false);
+              setScore(s => s + 10);
+              updateStats('score', 10);
+              updateStats('word');
+              updateStats('game');
+              showFeedback(`🎉 AMAZING! You spelled ${word}! 🌟`, true);
+              speak(`Fantastic! You spelled ${word}! You're so smart!`);
+              setTimeout(() => {
+                setCurrentMode('menu');
+                setLettersFound([]);
+                setTargetLetters([]);
+              }, 4000);
+              return;
+            }
+            
+            // Update display to show progress
+            const remaining = letters.slice(newLettersFound.length).join(' - ');
+            if (remaining) {
+              showFeedback(`Great! Now say: ${remaining}`, false);
+            }
+            
+            break; // Move to next transcript
+          } else if (currentIndex < letters.length && char !== letters[currentIndex]) {
+            // Wrong letter - but be encouraging!
+            if (event.results[i].isFinal) {
+              speak(`I heard ${char}. We need ${letters[currentIndex]}`);
+              showFeedback(`Try ${letters[currentIndex]} next!`, false);
+            }
+          }
+        }
+        
+        // Also check if they said the whole word at once
+        if (heard === word) {
+          // They said the whole word correctly!
+          recognition.stop();
+          setIsListening(false);
+          setLettersFound(letters);
           setScore(s => s + 10);
           updateStats('score', 10);
           updateStats('word');
           updateStats('game');
-          showFeedback(`🌟 Great job! You spelled ${word}!`);
-          recognition.stop();
-          setIsListening(false);
-          setTimeout(() => setCurrentMode('menu'), 3000);
-        } else if (heard.length >= word.length) {
-          // If they said enough letters but wrong
-          showFeedback(`You said: ${heard}. Try again!`, false);
-          speak(`Let's try again. Spell: ${word.split('').join(' ')}`);
+          showFeedback(`🎉 PERFECT! You said ${word}! 🌟`, true);
+          speak(`Perfect! You said ${word} all at once! Amazing!`);
+          setTimeout(() => {
+            setCurrentMode('menu');
+            setLettersFound([]);
+            setTargetLetters([]);
+          }, 4000);
+          return;
         }
       }
     };
     
     recognition.onerror = (event) => {
+      if (event.error === 'no-speech') {
+        // No speech is OK for kids - just keep listening
+        return;
+      }
+      
       console.error('Speech recognition error:', event.error);
-      setIsListening(false);
       
       if (event.error === 'not-allowed' || event.error === 'permission-denied') {
+        setIsListening(false);
         setVoiceReady(false);
         setSelectedMic('Permission denied');
         showFeedback('Microphone permission denied. Use the Type button instead.', false);
-      } else if (event.error === 'no-speech') {
-        showFeedback('No speech detected. Try again!', false);
-        // Restart recognition
-        if (voiceReady) {
-          setTimeout(() => recognition.start(), 500);
-        }
-      } else {
-        showFeedback(`Error: ${event.error}. Try typing!`, false);
       }
     };
     
     recognition.onend = () => {
-      console.log('Recognition ended');
-      setIsListening(false);
+      // Auto-restart if we're still in spelling mode and haven't completed
+      if (currentMode === 'spelling' && lettersFound.length < letters.length && voiceReady) {
+        setTimeout(() => {
+          try {
+            recognition.start();
+          } catch (e) {
+            console.log('Auto-restart failed:', e);
+          }
+        }, 100);
+      } else {
+        setIsListening(false);
+      }
     };
     
     try {
@@ -594,46 +678,96 @@ export function SimpleApp() {
           <h2 style={{ color: 'white', fontSize: '28px' }}>
             Spell: {currentWord}
           </h2>
-          <div style={{ color: '#aaa', fontSize: '20px', margin: '15px 0' }}>
+          <div style={{ fontSize: '40px', margin: '20px 0' }}>
             {currentWord.split('').map((letter, i) => (
-              <span key={i} style={{ margin: '0 10px', fontSize: '24px', color: '#4facfe' }}>
+              <span key={i} style={{ 
+                margin: '0 8px', 
+                padding: '10px 15px',
+                borderRadius: '10px',
+                background: i < lettersFound.length ? 'linear-gradient(135deg, #4facfe, #00f2fe)' : 'rgba(255,255,255,0.1)',
+                color: i < lettersFound.length ? 'white' : '#4facfe',
+                fontSize: '36px',
+                fontWeight: 'bold',
+                display: 'inline-block',
+                minWidth: '50px',
+                transform: i < lettersFound.length ? 'scale(1.1)' : 'scale(1)',
+                transition: 'all 0.3s ease',
+                boxShadow: i < lettersFound.length ? '0 4px 15px rgba(79, 172, 254, 0.6)' : 'none'
+              }}>
                 {letter}
               </span>
             ))}
           </div>
-          {!voiceReady && (
+          
+          {/* Progress indicator */}
+          <div style={{ color: '#aaa', fontSize: '18px', margin: '15px 0' }}>
+            {lettersFound.length > 0 && (
+              <div style={{ color: '#4facfe' }}>
+                ✅ You've said: {lettersFound.join(' ')}
+              </div>
+            )}
+            {lettersFound.length < targetLetters.length && isListening && (
+              <div style={{ color: '#ffa500', marginTop: '10px' }}>
+                🎤 Say the letter: {targetLetters[lettersFound.length]}
+              </div>
+            )}
+          </div>
+          
+          <div style={{ marginTop: '20px', display: 'flex', gap: '10px', justifyContent: 'center' }}>
+            {voiceReady && !isListening && (
+              <button 
+                onClick={() => listenForSpelling(currentWord)}
+                style={{
+                  padding: '15px 30px',
+                  fontSize: '18px',
+                  background: 'linear-gradient(135deg, #4facfe, #00f2fe)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '10px',
+                  cursor: 'pointer'
+                }}
+              >
+                🎤 Try Again
+              </button>
+            )}
+            {!voiceReady && (
+              <button 
+                onClick={handleManualSpelling}
+                style={{
+                  padding: '15px 30px',
+                  fontSize: '18px',
+                  background: 'linear-gradient(135deg, #667eea, #764ba2)',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '10px',
+                  cursor: 'pointer'
+                }}
+              >
+                Type Answer
+              </button>
+            )}
             <button 
-              onClick={handleManualSpelling}
+              onClick={() => {
+                setCurrentMode('menu');
+                setLettersFound([]);
+                setTargetLetters([]);
+                if (recognitionRef.current && isListening) {
+                  recognitionRef.current.stop();
+                }
+              }}
               style={{
-                marginTop: '20px',
                 padding: '15px 30px',
                 fontSize: '18px',
-                background: 'linear-gradient(135deg, #667eea, #764ba2)',
+                background: '#555',
                 color: 'white',
                 border: 'none',
                 borderRadius: '10px',
                 cursor: 'pointer'
               }}
             >
-              Type Answer
+              Back to Menu
             </button>
-          )}
-          <button 
-            onClick={() => setCurrentMode('menu')}
-            style={{
-              marginTop: '20px',
-              marginLeft: '10px',
-              padding: '15px 30px',
-              fontSize: '18px',
-              background: '#555',
-              color: 'white',
-              border: 'none',
-              borderRadius: '10px',
-              cursor: 'pointer'
-            }}
-          >
-            Back to Menu
-          </button>
+          </div>
         </div>
       )}
 
