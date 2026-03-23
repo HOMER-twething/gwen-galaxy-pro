@@ -14,6 +14,10 @@ export function SimpleApp() {
   const [feedback, setFeedback] = useState('');
   const [showSpaceRace, setShowSpaceRace] = useState(false);
   const [showDashboard, setShowDashboard] = useState(false);
+  const [selectedMic, setSelectedMic] = useState('Default');
+  const [micDevices, setMicDevices] = useState([]);
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef(null);
 
   // Word lists for spelling
   const easyWords = ['CAT', 'DOG', 'SUN', 'MOM', 'DAD', 'BEE', 'CUP', 'HAT', 'BIG', 'RED'];
@@ -89,9 +93,35 @@ export function SimpleApp() {
     
     setScene(scene);
     
-    // Check voice support
+    // Check voice support and get microphones
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
       setVoiceReady(true);
+      
+      // Get microphone devices
+      navigator.mediaDevices.enumerateDevices().then(devices => {
+        const mics = devices.filter(device => device.kind === 'audioinput');
+        setMicDevices(mics);
+        if (mics.length > 0) {
+          setSelectedMic(mics[0].label || 'Microphone 1');
+        }
+      }).catch(err => {
+        console.error('Error getting microphones:', err);
+        setSelectedMic('No microphone access');
+      });
+      
+      // Request microphone permission
+      navigator.mediaDevices.getUserMedia({ audio: true })
+        .then(stream => {
+          console.log('Microphone access granted');
+          stream.getTracks().forEach(track => track.stop()); // Stop the stream after getting permission
+        })
+        .catch(err => {
+          console.error('Microphone permission denied:', err);
+          setVoiceReady(false);
+          setSelectedMic('Permission denied');
+        });
+    } else {
+      setSelectedMic('Not supported');
     }
     
     return () => {
@@ -165,7 +195,10 @@ export function SimpleApp() {
     speak(`Let's spell the word: ${word}. ${word.split('').join(' ')}`);
     
     if (voiceReady) {
-      setTimeout(() => listenForSpelling(word), 3000);
+      setTimeout(() => {
+        setIsListening(true);
+        listenForSpelling(word);
+      }, 3000);
     }
   };
 
@@ -173,43 +206,101 @@ export function SimpleApp() {
   const listenForSpelling = (word) => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     const recognition = new SpeechRecognition();
-    recognition.continuous = false;
+    recognitionRef.current = recognition;
+    
+    recognition.continuous = true;
+    recognition.interimResults = true;
     recognition.lang = 'en-US';
     recognition.maxAlternatives = 3;
     
+    recognition.onstart = () => {
+      console.log('Voice recognition started for word:', word);
+      setIsListening(true);
+      showFeedback(`Listening for: ${word}`, false);
+    };
+    
     recognition.onresult = (event) => {
-      const results = event.results[0];
-      let found = false;
+      let finalTranscript = '';
+      let interimTranscript = '';
       
-      for (let i = 0; i < results.length; i++) {
-        const heard = results[i].transcript.toUpperCase().replace(/[^A-Z]/g, '');
-        console.log('Heard:', heard, 'Looking for:', word);
-        
-        if (heard.includes(word) || word.includes(heard)) {
-          found = true;
-          break;
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript;
+        } else {
+          interimTranscript += transcript;
         }
       }
       
-      if (found) {
-        setScore(s => s + 10);
-        updateStats('score', 10);
-        updateStats('word');
-        updateStats('game');
-        showFeedback(`🌟 Great job! You spelled ${word}!`);
-        setTimeout(() => setCurrentMode('menu'), 3000);
-      } else {
-        showFeedback(`Try again! The word is ${word}`, false);
-        speak(`Let's try again. Spell: ${word.split('').join(' ')}`);
+      // Show interim results
+      if (interimTranscript) {
+        const cleaned = interimTranscript.toUpperCase().replace(/[^A-Z]/g, '');
+        showFeedback(`Hearing: ${cleaned}`, false);
+      }
+      
+      // Process final results
+      if (finalTranscript) {
+        const heard = finalTranscript.toUpperCase().replace(/[^A-Z]/g, '');
+        console.log('Final heard:', heard, 'Looking for:', word);
+        
+        // Check if the word was spelled correctly
+        if (heard.includes(word)) {
+          setScore(s => s + 10);
+          updateStats('score', 10);
+          updateStats('word');
+          updateStats('game');
+          showFeedback(`🌟 Great job! You spelled ${word}!`);
+          recognition.stop();
+          setIsListening(false);
+          setTimeout(() => setCurrentMode('menu'), 3000);
+        } else if (heard.length >= word.length) {
+          // If they said enough letters but wrong
+          showFeedback(`You said: ${heard}. Try again!`, false);
+          speak(`Let's try again. Spell: ${word.split('').join(' ')}`);
+        }
       }
     };
     
     recognition.onerror = (event) => {
-      console.log('Speech recognition error:', event.error);
-      showFeedback('Voice not working, try typing!', false);
+      console.error('Speech recognition error:', event.error);
+      setIsListening(false);
+      
+      if (event.error === 'not-allowed' || event.error === 'permission-denied') {
+        setVoiceReady(false);
+        setSelectedMic('Permission denied');
+        showFeedback('Microphone permission denied. Use the Type button instead.', false);
+      } else if (event.error === 'no-speech') {
+        showFeedback('No speech detected. Try again!', false);
+        // Restart recognition
+        if (voiceReady) {
+          setTimeout(() => recognition.start(), 500);
+        }
+      } else {
+        showFeedback(`Error: ${event.error}. Try typing!`, false);
+      }
     };
     
-    recognition.start();
+    recognition.onend = () => {
+      console.log('Recognition ended');
+      setIsListening(false);
+    };
+    
+    try {
+      recognition.start();
+    } catch (error) {
+      console.error('Failed to start recognition:', error);
+      setIsListening(false);
+      showFeedback('Failed to start voice recognition. Try typing!', false);
+    }
+  };
+  
+  // Stop listening function
+  const stopListening = () => {
+    if (recognitionRef.current && isListening) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+      showFeedback('Stopped listening', false);
+    }
   };
 
   // Start math mode
@@ -545,6 +636,48 @@ export function SimpleApp() {
           </button>
         </div>
       )}
+
+      {/* Microphone Status - Bottom Right */}
+      <div style={{
+        position: 'absolute',
+        bottom: '20px',
+        right: '20px',
+        padding: '15px',
+        background: 'rgba(0, 0, 0, 0.8)',
+        color: 'white',
+        borderRadius: '10px',
+        fontSize: '14px',
+        border: isListening ? '2px solid #4facfe' : '1px solid rgba(255, 255, 255, 0.2)',
+        minWidth: '200px'
+      }}>
+        <div style={{ marginBottom: '5px', fontWeight: 'bold' }}>
+          🎤 Microphone Status
+        </div>
+        <div style={{ fontSize: '12px' }}>
+          Device: {selectedMic}
+        </div>
+        <div style={{ fontSize: '12px', marginTop: '5px' }}>
+          Status: {isListening ? '🔴 Listening...' : voiceReady ? '✅ Ready' : '❌ Not Available'}
+        </div>
+        {isListening && (
+          <button
+            onClick={stopListening}
+            style={{
+              marginTop: '10px',
+              padding: '5px 10px',
+              fontSize: '12px',
+              background: '#ff4444',
+              color: 'white',
+              border: 'none',
+              borderRadius: '5px',
+              cursor: 'pointer',
+              width: '100%'
+            }}
+          >
+            Stop Listening
+          </button>
+        )}
+      </div>
 
       {/* Math Mode */}
       {currentMode === 'math' && mathProblem && (
