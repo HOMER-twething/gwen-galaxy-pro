@@ -10,26 +10,24 @@
     "deploy": "npm run build && gh-pages -d dist"
   },
   "dependencies": {
-    "@babylonjs/core": "^7.0.0",
-    "@babylonjs/gui": "^7.0.0",
-    "@babylonjs/loaders": "^7.0.0",
-    "@babylonjs/materials": "^7.0.0",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "howler": "^2.2.4",
-    "localforage": "^1.10.0",
-    "@tensorflow/tfjs": "^4.17.0",
-    "@tensorflow-models/speech-commands": "^0.5.4",
-    "chart.js": "^4.4.1",
-    "react-chartjs-2": "^5.2.0",
-    "idb": "^7.1.1"
+    "@vitejs/plugin-react": "^6.0.1",
+    "babylonjs": "^8.56.1",
+    "babylonjs-gui": "^8.56.1",
+    "babylonjs-loaders": "^8.56.1",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "vite": "^8.0.2"
   },
+  "main": "vite.config.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HOMER-twething/gwen-galaxy-pro.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "homepage": "https://homer-twething.github.io/gwen-galaxy-pro/",
   "devDependencies": {
-    "@types/react": "^18.2.43",
-    "@types/react-dom": "^18.2.17",
-    "@vitejs/plugin-react": "^4.2.1",
-    "gh-pages": "^6.1.1",
-    "vite": "^5.0.8",
-    "vite-plugin-pwa": "^0.17.4"
+    "gh-pages": "^6.3.0"
   }
 }

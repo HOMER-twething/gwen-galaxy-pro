@@ -1,4 +1,4 @@
-import * as BABYLON from '@babylonjs/core/Legacy/legacy';
+import * as BABYLON from 'babylonjs/Legacy/legacy';
 import { AdvancedDynamicTexture, TextBlock, Rectangle, Button, Control, InputText } from '@babylonjs/gui';
 
 export class PlanetDefense {

@@ -9,25 +9,10 @@ export default defineConfig({
     outDir: 'dist',
     assetsDir: 'assets',
     sourcemap: false,
-    minify: 'terser',
-    terserOptions: {
-      compress: {
-        drop_console: true,
-        drop_debugger: true,
-      },
-    },
-    rollupOptions: {
-      output: {
-        manualChunks: {
-          babylon: ['@babylonjs/core'],
-          vendor: ['react', 'react-dom'],
-        },
-      },
-    },
     chunkSizeWarningLimit: 1000,
   },
   optimizeDeps: {
-    include: ['@babylonjs/core'],
+    include: ['babylonjs'],
   },
   server: {
     port: 5173,

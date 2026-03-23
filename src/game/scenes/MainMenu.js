@@ -1,5 +1,5 @@
 import * as BABYLON from '@babylonjs/core';
-import { BloomEffect } from '@babylonjs/core/PostProcesses/bloomEffect';
+import { BloomEffect } from 'babylonjs/PostProcesses/bloomEffect';
 
 export class MainMenu {
   constructor(engine) {
